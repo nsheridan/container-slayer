@@ -83,10 +83,12 @@ func main() {
 		unhealthy[c.ID]++
 		if unhealthy[c.ID] >= unhealthyCount {
 			log.Printf("Restarting container %s [%s]", c.ID, c.Names[0])
+			ctx, cancel := context.WithDeadline(ctx, time.Now().Add(timeout))
 			if err := client.ContainerRestart(ctx, c.ID, &timeout); err != nil {
 				log.Printf("Error restarting container: %v", err)
 			}
 			delete(unhealthy, c.ID)
+			cancel()
 		}
 	}
 }
