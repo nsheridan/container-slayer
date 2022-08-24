@@ -58,8 +58,6 @@ func main() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
-			ctx, cancel := context.WithDeadline(ctx, time.Now().Add(timeout))
-			defer cancel()
 			err := getUnhealthy(ctx, client, contsCh)
 			if err != nil {
 				log.Println(err)
@@ -83,12 +81,10 @@ func main() {
 		unhealthy[c.ID]++
 		if unhealthy[c.ID] >= unhealthyCount {
 			log.Printf("Restarting container %s [%s]", c.ID, c.Names[0])
-			ctx, cancel := context.WithDeadline(ctx, time.Now().Add(timeout))
 			if err := client.ContainerRestart(ctx, c.ID, &timeout); err != nil {
 				log.Printf("Error restarting container: %v", err)
 			}
 			delete(unhealthy, c.ID)
-			cancel()
 		}
 	}
 }
