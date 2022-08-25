@@ -19,6 +19,7 @@ var (
 	timeout        time.Duration
 	unhealthyCount int
 	sockPath       string
+	filterLabel    string
 
 	dockerAPIVersion = "1.38"
 )
@@ -28,15 +29,10 @@ func init() {
 	flag.DurationVar(&timeout, "timeout", 30*time.Second, "Time to wait for Docker to respond")
 	flag.IntVar(&unhealthyCount, "unhealthy_count", 3, "Number of consecutive unhealthy probes before restarting the container")
 	flag.StringVar(&sockPath, "socket", "/var/run/docker.sock", "Path to Docker socket")
+	flag.StringVar(&filterLabel, "filter", "all", "Only restart containers with this label. 'all' means all containers will be considered.")
 }
 
-func main() {
-	flag.Parse()
-
-	contsCh := make(chan types.Container)
-	ctx := context.Background()
-	g, ctx := errgroup.WithContext(ctx)
-
+func dockerClient(timeout time.Duration) (*docker.Client, error) {
 	d := new(net.Dialer)
 	hClient := &http.Client{
 		Timeout: 5 * time.Second,
@@ -48,19 +44,28 @@ func main() {
 			},
 		},
 	}
+	return docker.NewClientWithOpts(docker.WithHTTPClient(hClient), docker.WithVersion(dockerAPIVersion))
+}
 
-	client, err := docker.NewClientWithOpts(docker.WithHTTPClient(hClient), docker.WithVersion(dockerAPIVersion))
+func main() {
+	flag.Parse()
+
+	containers := make(chan types.Container)
+	ctx := context.Background()
+	g, ctx := errgroup.WithContext(ctx)
+
+	client, err := dockerClient(timeout)
 	if err != nil {
 		log.Fatalf("error creating docker client: %v\n", err)
 	}
 
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 	g.Go(func() error {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
 		for {
-			err := getUnhealthy(ctx, client, contsCh)
+			err := getUnhealthy(ctx, client, containers)
 			if err != nil {
-				log.Println(err)
+				log.Printf("error fetching containers: %v\n", err)
 			}
 			select {
 			case <-ticker.C:
@@ -72,12 +77,12 @@ func main() {
 	})
 	go func() {
 		if err := g.Wait(); err != nil {
-			log.Printf("Error retrieving containers: %v\n", err)
+			log.Printf("fetch loop exited: %v\n", err)
 		}
 	}()
 
 	unhealthy := map[string]int{}
-	for c := range contsCh {
+	for c := range containers {
 		unhealthy[c.ID]++
 		if unhealthy[c.ID] >= unhealthyCount {
 			log.Printf("Restarting container %s [%s]", c.ID, c.Names[0])
@@ -90,10 +95,14 @@ func main() {
 }
 
 func getUnhealthy(ctx context.Context, client *docker.Client, ch chan<- types.Container) error {
+	f := filters.NewArgs(filters.Arg("health", "none"))
+	if filterLabel != "all" {
+		f.Add("label", filterLabel)
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	unhealthy, err := client.ContainerList(ctx, types.ContainerListOptions{
-		Filters: filters.NewArgs(filters.KeyValuePair{
-			Key: "health", Value: "unhealthy",
-		}),
+		Filters: f,
 	})
 	if err != nil {
 		return err
