@@ -11,4 +11,4 @@ RUN go build -o slayer
 FROM gcr.io/distroless/base
 
 COPY --from=build /work/slayer /
-CMD ["/slayer"]
+ENTRYPOINT ["/slayer"]

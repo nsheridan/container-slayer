@@ -50,3 +50,9 @@ Then use the `-filter` flag to limit restarts to just those labeled containers.
 ```
 container-slayer -filter safe-to-reap
 ```
+
+or
+
+```
+docker run --name slayer -v /var/run/docker.sock:/var/run/docker.sock --restart always --detach nsheridan/container-slayer -filter safe-to-reap
+```
