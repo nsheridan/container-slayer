@@ -95,7 +95,7 @@ func main() {
 }
 
 func getUnhealthy(ctx context.Context, client *docker.Client, ch chan<- types.Container) error {
-	f := filters.NewArgs(filters.Arg("health", "none"))
+	f := filters.NewArgs(filters.Arg("health", "unhealthy"))
 	if filterLabel != "all" {
 		f.Add("label", filterLabel)
 	}
