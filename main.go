@@ -32,7 +32,7 @@ func init() {
 	flag.StringVar(&filterLabel, "filter", "all", "Only restart containers with this label. 'all' means all containers will be considered.")
 }
 
-func dockerClient(timeout time.Duration) (*docker.Client, error) {
+func dockerClient(timeout time.Duration, sockPath string) (*docker.Client, error) {
 	d := new(net.Dialer)
 	hClient := &http.Client{
 		Timeout: 5 * time.Second,
@@ -54,7 +54,7 @@ func main() {
 	ctx := context.Background()
 	g, ctx := errgroup.WithContext(ctx)
 
-	client, err := dockerClient(timeout)
+	client, err := dockerClient(timeout, sockPath)
 	if err != nil {
 		log.Fatalf("error creating docker client: %v\n", err)
 	}
@@ -76,9 +76,8 @@ func main() {
 		}
 	})
 	go func() {
-		if err := g.Wait(); err != nil {
-			log.Fatalf("fetch loop exited: %v\n", err)
-		}
+		err := g.Wait()
+		log.Fatalf("fetch loop exited: %v\n", err)
 	}()
 
 	unhealthy := map[string]int{}
