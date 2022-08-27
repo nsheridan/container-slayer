@@ -77,7 +77,7 @@ func main() {
 	})
 	go func() {
 		if err := g.Wait(); err != nil {
-			log.Printf("fetch loop exited: %v\n", err)
+			log.Fatalf("fetch loop exited: %v\n", err)
 		}
 	}()
 
